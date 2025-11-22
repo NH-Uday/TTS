@@ -1,8 +1,6 @@
 const express = require("express");
 const path = require("path");
-const dotenv = require("dotenv");
-
-dotenv.config();
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,34 +9,22 @@ app.use(express.json());
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// Mode 
 const modeSettings = {
   motivating: {
-    // Louder, faster, slightly higher pitch.
-    stability: 0.95,
-    similarity_boost: 0.9,
-    style: 0.05,
-    use_speaker_boost: true,
-    speed: 1.2,
-    voiceId:
-      process.env.ELEVENLABS_VOICE_ID ||
-      process.env.ELEVENLABS_VOICE_ID
+    speed: 1.25, 
+    instructions:
+      "Speak like a loud, fast, high-energy football coach, very motivating and pumped up."
   },
-
   calming: {
-    // Softer, slower, lower pitch
-    stability: 0.85,
-    similarity_boost: 0.75,
-    style: 0.15,
-    use_speaker_boost: false,
-    speed: 0.8,
-    voiceId:
-      process.env.ELEVENLABS_VOICE_ID ||
-      process.env.ELEVENLABS_VOICE_ID
+    speed: 0.85, 
+    instructions:
+      "Speak softly and slowly, with a calm, reassuring, low-energy tone like a relaxing coach."
   }
 };
 
-const ELEVEN_TTS_URL = (voiceId) =>
-  `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+// OpenAI TTS endpoint
+const OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech";
 
 app.post("/api/tts", async (req, res) => {
   try {
@@ -48,34 +34,31 @@ app.post("/api/tts", async (req, res) => {
       return res.status(400).json({ error: "Missing text" });
     }
 
-    const config = modeSettings[mode] || modeSettings.motivating;
+    const cfg = modeSettings[mode] || modeSettings.motivating;
 
-    const response = await fetch(
-      ELEVEN_TTS_URL(config.voiceId),
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": process.env.ELEVENLABS_API_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: config.stability,
-            similarity_boost: config.similarity_boost,
-            style: config.style,
-            use_speaker_boost: config.use_speaker_boost,
-            speed: config.speed
-          }
-        })
-      }
-    );
+    const model = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
+    const voice = process.env.OPENAI_TTS_VOICE || "alloy";
+
+    const response = await fetch(OPENAI_TTS_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        voice,
+        input: text,
+        speed: cfg.speed,
+        instructions: cfg.instructions,
+        format: "mp3"
+      })
+    });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("ElevenLabs error:", errText);
-      return res.status(500).json({ error: "ElevenLabs TTS failed" });
+      console.error("OpenAI TTS error:", errText);
+      return res.status(500).json({ error: "OpenAI TTS failed" });
     }
 
     const audioBuffer = await response.arrayBuffer();
