@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title> TTS </title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body {
+      margin: 0; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      background: #020617; color: #e5e7eb;
+    }
+    .app {
+      background: #020617;
+      padding: 24px;
+      border-radius: 18px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+      max-width: 480px; width: 100%;
+      border: 1px solid #1f2937;
+    }
+    h1 { margin: 0 0 4px; font-size: 1.5rem; }
+    .subtitle { margin: 0 0 16px; font-size: 0.9rem; color: #9ca3af; }
+    textarea {
+      width: 100%; min-height: 120px; resize: vertical;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #374151;
+      background: #020617; color: #e5e7eb;
+      font-size: 0.95rem;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 1px #3b82f6;
+    }
+    .modes {
+      margin: 14px 0;
+      display: flex; gap: 10px;
+    }
+    .mode-btn {
+      flex: 1; padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease, background 0.08s ease;
+    }
+    .mode-btn span.icon { font-size: 1.1rem; }
+    .mode-btn.active {
+      border-color: #3b82f6;
+      background: radial-gradient(circle at top left, #1d4ed8, #020617);
+      box-shadow: 0 10px 25px rgba(37,99,235,0.45);
+    }
+    .mode-btn:hover { transform: translateY(-1px); }
+
+    .controls {
+      margin-top: 8px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .play-btn {
+      flex: 1; padding: 10px 12px;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+      font-size: 0.95rem; font-weight: 600;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px;
+      box-shadow: 0 10px 25px rgba(21,128,61,0.45);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.08s ease;
+    }
+    .play-btn:disabled {
+      opacity: 0.5; cursor: default; box-shadow: none;
+    }
+    .play-btn:not(:disabled):active {
+      transform: translateY(1px);
+      box-shadow: 0 4px 16px rgba(21,128,61,0.35);
+    }
+    .status { margin-top: 6px; font-size: 0.8rem; color: #9ca3af; }
+    .warning { margin-top: 6px; font-size: 0.75rem; color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Text-To-Speech</h1>
+    <p class="subtitle">Type your message, pick a mode, and play.</p>
+
+    <textarea id="text-input" placeholder="Type what you want the coach to say..."></textarea>
+
+    <div class="modes">
+      <button class="mode-btn active" data-mode="motivating" id="btn-motivating">
+        <span class="icon">⚡</span><span>Motivating</span>
+      </button>
+      <button class="mode-btn" data-mode="calming" id="btn-calming">
+        <span class="icon">🌙</span><span>Calming</span>
+      </button>
+    </div>
+
+    <div class="controls">
+      <button id="play-btn" class="play-btn">▶️ Play</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="warning">
+    </div>
+
+    <audio id="player" hidden></audio>
+  </div>
+
+  <script>
+    const textInput   = document.getElementById("text-input");
+    const playBtn     = document.getElementById("play-btn");
+    const statusEl    = document.getElementById("status");
+    const player      = document.getElementById("player");
+    const modeButtons = document.querySelectorAll(".mode-btn");
+
+    let currentMode = "motivating";
+    let isPlaying   = false;
+    let lastText    = "";
+    let lastMode    = "";
+    let lastUrl     = null;
+
+    modeButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        modeButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentMode = btn.dataset.mode;
+      });
+    });
+
+    player.addEventListener("ended", () => {
+      isPlaying = false;
+      playBtn.textContent = "▶️ Play";
+      statusEl.textContent = "Finished.";
+    });
+
+    playBtn.addEventListener("click", async () => {
+      const text = textInput.value.trim();
+
+      if (isPlaying) {
+        player.pause();
+        isPlaying = false;
+        playBtn.textContent = "▶️ Play";
+        statusEl.textContent = "Paused.";
+        return;
+      }
+
+      if (
+        player.src &&
+        text &&
+        text === lastText &&
+        currentMode === lastMode
+      ) {
+        try {
+          await player.play();
+          isPlaying = true;
+          playBtn.textContent = "⏸ Pause";
+          statusEl.textContent = `Playing (${currentMode})`;
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent = "Error resuming audio.";
+        }
+        return;
+      }
+
+      if (!text) {
+        statusEl.textContent = "Type something first.";
+        return;
+      }
+
+      try {
+        playBtn.disabled = true;
+        statusEl.textContent = `Generating ${currentMode} audio ...`;
+
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, mode: currentMode })
+        });
+
+        if (!res.ok) {
+          statusEl.textContent = "TTS request failed.";
+          playBtn.disabled = false;
+          return;
+        }
+
+        const arrayBuffer = await res.arrayBuffer();
+        const blob = new Blob([arrayBuffer], { type: "audio/mpeg" });
+        const url = URL.createObjectURL(blob);
+
+        if (lastUrl) {
+          URL.revokeObjectURL(lastUrl);
+        }
+
+        lastUrl = url;
+        lastText = text;
+        lastMode = currentMode;
+
+        player.src = url;
+        await player.play();
+
+        isPlaying = true;
+        playBtn.textContent = "⏸ Pause";
+        statusEl.textContent = `Playing (${currentMode})`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error generating or playing audio.";
+      } finally {
+        playBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
